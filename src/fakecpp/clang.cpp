@@ -16,16 +16,18 @@
   * Clang specific functions for fakecpp
   */
 #include <clang-c/Index.h>
+#include <clang/AST/PrettyPrinter.h>
 #include <iostream>
 #include <limits.h>
 #include <cstdlib>
 #include <cstring>
 #include "fakecpp.h"
 
-#define IGNORE_DIRECTORY "/usr/include"
+static std::vector<std::string> ignoredDirs = { "/usr/include","/usr/lib" };
 
 CXChildVisitResult visitor( CXCursor cursor, CXCursor /* parent */, CXClientData clientData );
 static std::vector<functionRef> refs;
+
 void parseAst(std::string filename)
 {
     CXIndex index = clang_createIndex(0,1);
@@ -38,6 +40,13 @@ void parseAst(std::string filename)
     clang_disposeTranslationUnit(tu);
     clang_disposeIndex(index);
     storeEntries(refs);
+}
+
+std::string getStdString(const CXString &s)
+{
+    std::string rv = clang_getCString(s);
+    clang_disposeString(s);
+    return rv;
 }
 
 std::string getCursorKindName( CXCursorKind cursorKind )
@@ -58,116 +67,85 @@ std::string getCursorSpelling( CXCursor cursor )
   return result;
 }
 
+bool isAllowedDirectory(std::string f)
+{
+    for (std::string p: ignoredDirs)
+    {
+        if (p == f.substr(0,p.length()))
+            return false;
+    }
+    return true;
+}
+
+bool isFunctionImplementation(CXCursor &cursor,std::string &decl,std::string &filename,unsigned &lineno)
+{
+    std::string cs = getStdString(clang_getCursorPrettyPrinted(cursor,nullptr));
+    if (cs.find('{') == std::string::npos) // Just a declaration, not the "meat" of the function, so we dont care
+        return false;
+    clang::LangOptions lo;
+    struct clang::PrintingPolicy pol(lo);
+    pol.adjustForCPlusPlus();
+    pol.TerseOutput = true;
+    pol.FullyQualifiedName = true;
+    decl = getStdString(clang_getCursorPrettyPrinted(cursor,&pol));
+    CXSourceLocation location = clang_getCursorLocation( cursor );
+    CXFile f;
+    lineno = 0;
+    filename = "(None)";
+    clang_getSpellingLocation(location,&f,&lineno,nullptr,nullptr);
+    if (lineno)
+    {
+        filename = getStdString(clang_File_tryGetRealPathName(f));
+    }
+    return isAllowedDirectory(filename);
+}
+
 CXChildVisitResult visitor( CXCursor cursor, CXCursor /* parent */, CXClientData clientData )
 {
   struct functionRef *r = reinterpret_cast<struct functionRef *>(clientData);
-  CXSourceLocation location = clang_getCursorLocation( cursor );
-  CXFile f;
-  unsigned lineNo = 0;
-  std::string fileName = "(None)";
-  clang_getSpellingLocation(location,&f,&lineNo,nullptr,nullptr);
-  if (lineNo)
-  {
-      CXString clfilename = clang_File_tryGetRealPathName(f);
-      if (clfilename.data)
-      {
-          char actpath[PATH_MAX+1];
-          memset(actpath,0,PATH_MAX+1);
-          fileName = realpath(reinterpret_cast<const char *>(clfilename.data),actpath);
-      }
-  }
 
-  if (fileName.substr(0,strlen(IGNORE_DIRECTORY)) == IGNORE_DIRECTORY)
-  {
-      clang_visitChildren(cursor,visitor,r);
-      return CXChildVisit_Continue;
-  }
   CXCursorKind cursorKind = clang_getCursorKind( cursor );
-  std::string cursorTypeStr = getCursorKindName(cursorKind);
-  std::string cursorName = getCursorSpelling(cursor);
-
-  std::cout << r->level << ":" << fileName << ":" << lineNo << " -> " <<
-               cursorTypeStr << " (" <<
-               cursorName << ")\n";
 
   switch (cursorKind)
   {
-  case CXCursor_Namespace:
-  {
-      struct functionRef cr(*r);
-      if (cr.ns.length())
-      {
-          cr.ns.append("::");
-          cr.ns.append(cursorName);
-      } else {
-          cr.ns = cursorName;
-      }
-      cr.level++;
-      clang_visitChildren(cursor,visitor,&cr);
-      break;
-  }
   case CXCursor_FunctionDecl:
   case CXCursor_FunctionTemplate:
   case CXCursor_CXXMethod:
   case CXCursor_Constructor:
   case CXCursor_Destructor:
   {
-      struct functionRef cr(*r);
-      cr.type = refType::funcTemplate;
-      cr.lineNo = lineNo;
-      cr.funcName = cursorName;
-      cr.filename = fileName;
-      cr.level++;
-      clang_visitChildren(cursor,visitor,&cr);
-      refs.push_back(cr);
+      std::string decl,filename;
+      unsigned lineno;
+      if (isFunctionImplementation(cursor,decl,filename,lineno))
+      {
+          std::cout << "Found " << decl << " at " << filename << ":" << lineno << std::endl;
+          struct functionRef cr;
+          cr.type = refType::funcImplementation;
+          cr.lineNo = lineno;
+          cr.funcName = decl;
+          cr.filename = filename;
+          refs.push_back(cr);
+      }
       break;
   }
   case CXCursor_CallExpr:
   {
-      struct functionRef cr(*r);
-      cr.type = refType::funcCall;
-      cr.lineNo = lineNo;
-      cr.funcName = cursorName;
-      cr.filename = fileName;
-      cr.level++;
-      clang_visitChildren(cursor,visitor,&cr);
-      refs.push_back(cr);
+      std::string decl,filename;
+      unsigned lineno;
+      if (isFunctionImplementation(cursor,decl,filename,lineno))
+      {
+          std::cout << "Found " << decl << " at " << filename << ":" << lineno << std::endl;
+          struct functionRef cr;
+          cr.type = refType::funcImplementation;
+          cr.lineNo = lineno;
+          cr.funcName = decl;
+          cr.filename = filename;
+          refs.push_back(cr);
+      }
       break;
   }
-  case CXCursor_ClassDecl:
-  case CXCursor_ClassTemplate:
-  {
-      struct functionRef cr(*r);
-      cr.className = cursorName;
-      cr.level++;
-      clang_visitChildren(cursor,visitor,&cr);
-      break;
+  default:;
   }
-  case CXCursor_CompoundStmt:
-  case CXCursor_ReturnStmt:
-  {
-      if (r->type == refType::funcTemplate)
-          r->type = refType::funcImplementation;
-      clang_visitChildren(cursor,visitor,r);
-      break;
-  }
-  case CXCursor_DeclRefExpr:
-  {
-      if (r->type == refType::funcCall && !r->className.length())
-          r->className = cursorName;
-      clang_visitChildren(cursor,visitor,r);
-      break;
-  }
-  case CXCursor_NamespaceRef:
-  {
-      if (r->type == refType::funcCall && !r->ns.length())
-          r->ns = cursorName;
-      clang_visitChildren(cursor,visitor,r);
-      break;
-  }
-  default:
-      clang_visitChildren(cursor,visitor,r);
-  }
-
+  clang_visitChildren(cursor,visitor,r);
   return CXChildVisit_Continue;
 }
