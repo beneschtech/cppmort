@@ -35,47 +35,24 @@ int main(int argc,char *argv[])
     std::vector<std::string> args = parseArgs(argc,argv);
     if (args.size() == 1)
         return 1;
-    // Find the clang executable on the system
-    std::string clangExec = findClangExecutable();
-    if (!clangExec.length())
-        return 2;
-    // Determine a good temporary file to write AST out to
-    std::string outfile = outTmpFile();
 
-    // Set up to run clang, and where to write AST
-    args.front() = "clang";
-    args.push_back("-emit-ast");
-    args.push_back("-o");
-    args.push_back(outfile);
-
-    // Fork/exec clang and capture return value
-    pid_t pid = launchProcess(args,clangExec);
-    if (pid > 0)
-    {
-        int exitStatus;
-        waitpid(pid,&exitStatus,0);
-        if (WEXITSTATUS(exitStatus) != 0)
-        {
-            return 4;
-        }
-    } else {
-        return 3;
-    }
     // If we made it here, we have an AST in outfile and can parse it
-    parseAst(outfile);
-    ::unlink(outfile.c_str());
+    parseAst(args);
     return 0;
 }
 
 std::vector<std::string> parseArgs(int argc,char **argv)
 {
     std::vector<std::string> rv;
+    argc--; argv++;
     while (argc)
     {
         std::string arg = *argv;
         rv.push_back(arg);
         argv++; argc--;
     }
+    rv.push_back("-idirafter");
+    rv.push_back("/opt/llvm/lib/clang/12.0.0/include");
     return rv;
 }
 

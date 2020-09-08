@@ -7,7 +7,7 @@
 std::vector<std::string> parseArgs(int,char **);
 std::string findClangExecutable();
 std::string outTmpFile();
-void parseAst(std::string);
+void parseAst(std::vector<std::string> &args);
 pid_t launchProcess(std::vector<std::string> &, std::string clangExec);
 
 enum refType
