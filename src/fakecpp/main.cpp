@@ -11,7 +11,7 @@
  * LLC
  *
  **/
-
+#include <config.h>
 #include <iostream>
 #include <string.h>
 #include <sys/types.h>
@@ -19,6 +19,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "fakecpp.h"
+
+// From clangdirs.cpp
+void addClangDirs(std::vector<std::string> &args);
 
 /**
  * This program takes the args it was passed, as it masquerades as a c/c++ compiler and launches clang with
@@ -34,86 +37,63 @@ int main(int argc,char *argv[])
     // Not really parsing, more like collecting
     std::vector<std::string> args = parseArgs(argc,argv);
     if (args.size() == 1)
-        return 1;
+        return 0;
 
     // If we made it here, we have an AST in outfile and can parse it
     parseAst(args);
     return 0;
 }
 
+std::string fileExtension(std::string filename)
+{
+    std::string rv;
+    size_t len = filename.length();
+    len--;
+    while (len && filename[len] != '.')
+        len--;
+    if (!len) // executable name
+        return "";
+    rv = filename.substr(len+1);
+    return rv;
+}
+
 std::vector<std::string> parseArgs(int argc,char **argv)
 {
-    std::vector<std::string> rv;
+    std::vector<std::string> rv,args,files;
+    std::string command = "clang";
     argc--; argv++;
+
     while (argc)
     {
         std::string arg = *argv;
-        rv.push_back(arg);
+        if (arg == "-o") { // skip output files
+            argv+=2; argc-=2;
+            continue;
+        }
+        if (arg[0] == '-')
+        {
+            args.push_back(arg);
+        } else {
+            if (fileExtension(arg) != ".o")
+                files.push_back(arg);
+        }
         argv++; argc--;
     }
-    rv.push_back("-idirafter");
-    rv.push_back("/opt/llvm/lib/clang/12.0.0/include");
+    rv.push_back(command);
+    if (!files.size()) // Most likely a linker command
+    {
+        return rv;
+    }
+    for (std::string arg: files)
+    {
+        rv.push_back(arg);
+    }
+    rv.push_back("--");
+    for (std::string arg: args)
+    {
+        rv.push_back(arg);
+    }
+    addClangDirs(rv);
     return rv;
 }
 
-std::string findClangExecutable()
-{
-    char *pathEnv = strdup(getenv("PATH"));
-    char *token = strtok(pathEnv,":");
-    while (token)
-    {
-        std::string candidate = token;
-        candidate.append("/clang");
-        struct stat s;
-        if (stat(candidate.c_str(),&s) == 0)
-        {
-            free(pathEnv);
-            return candidate;
-        }
-        token = strtok(nullptr,":");
-    }
-    free(pathEnv);
-    return "";
-}
-
-std::string outTmpFile()
-{
-    char *tmppath = strdup(P_tmpdir "/XXXXXX");
-    int fd = mkstemp(tmppath);
-    ::close(fd);
-    std::string rv = tmppath;
-    rv.append(".ast");
-    ::rename(tmppath,rv.c_str());
-    ::free(tmppath);
-    return rv;
-}
-
-pid_t launchProcess(std::vector<std::string> &args,std::string clangExec)
-{
-    pid_t pid = fork();
-
-    if (pid != 0)
-        return pid; // Parent process
-
-    const char **argList = (const char **)malloc((args.size() + 1) * sizeof(char *));
-    memset(argList,0,(args.size() + 1) * sizeof(char *));
-    int idx = 0;
-    for (std::string s: args)
-    {
-        argList[idx] = args[idx].c_str();
-        idx++;
-    }
-    execv(clangExec.c_str(),const_cast<char *const *>(argList));
-    ::exit(0); // Should never reach here
-    return 0;
-}
-
-functionRef::functionRef()
-{
-    type = refType::none;
-    ns = "";
-    funcName = "";
-    lineNo = 0;
-    className = "";
-    filename = "<none>";
-}

@@ -15,18 +15,20 @@
 /**
   * Clang specific functions for fakecpp
   */
-#include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/ASTMatchers/ASTMatchers.h"
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/Tooling/CommonOptionsParser.h"
-#include "clang/Tooling/Tooling.h"
-#include "llvm/Support/CommandLine.h"
+#include <config.h>
+#include <clang/ASTMatchers/ASTMatchFinder.h>
+#include <clang/ASTMatchers/ASTMatchers.h>
+#include <clang/Frontend/FrontendActions.h>
+#include <clang/Tooling/CommonOptionsParser.h>
+#include <clang/Tooling/Tooling.h>
+#include <llvm/Support/CommandLine.h>
 #include <iostream>
 #include <limits.h>
 #include <cstdlib>
 #include <cstring>
 #include "fakecpp.h"
 
+//#define VERBOSE 1
 using namespace clang::ast_matchers;
 using namespace clang::tooling;
 using namespace clang;
@@ -56,44 +58,10 @@ static llvm::cl::extrahelp CommonHelp(clang::tooling::CommonOptionsParser::HelpM
 // A help message for this specific tool can be added afterwards.
 static llvm::cl::extrahelp MoreHelp("\nMore help text...");
 
-void parseAst(std::vector<std::string> &args)
-{    
-    // Create set of fake args for clang toollib
-    std::vector<std::string> callArgs;
-    std::string compFile;
-    bool ignoreNext = false;
-    bool nextIsCompFile = false;
-    for (std::string a: args)
-    {
-        if (ignoreNext)
-        {
-            ignoreNext = false;
-            continue;
-        }
-        if (nextIsCompFile)
-        {
-            compFile = a;
-            nextIsCompFile = false;
-            continue;
-        }
-        if (a.at(0) == '-') // Probably an option
-        {
-            if (a.at(1) == 'o') // Specify output file not needed
-            {
-                ignoreNext = true;
-                continue;
-            }
-            if (a.at(1) == 'c')
-            {
-                nextIsCompFile = true;
-                continue;
-            }
-        }
-        callArgs.push_back(a);
-    }
-    callArgs.insert(callArgs.begin(),"--");
-    callArgs.insert(callArgs.begin(),compFile);
-    callArgs.insert(callArgs.begin(),"clang++");
+static std::vector<functionRef> dbEntries;
+
+void parseAst(std::vector<std::string> &callArgs)
+{            
     int argSz = callArgs.size();
     const char ** argvals = (const char **)malloc(sizeof(char *)*argSz);
     for (size_t idx = 0; idx < callArgs.size(); idx++)
@@ -113,7 +81,9 @@ void parseAst(std::vector<std::string> &args)
     CallFinder.addMatcher(callMatcher, &CEcb);
     CallFinder.addMatcher(functionMatcher,&FDcb);
 
+    dbEntries.clear();
     Tool.run(clang::tooling::newFrontendActionFactory(&CallFinder).get());
+    storeEntries(dbEntries);
 }
 
 std::string getFunctionSignature(const FunctionDecl *f)
@@ -143,17 +113,31 @@ void CallExprCB::run(const MatchFinder::MatchResult &Result) {
         if (callerLocation.isInSystemHeader() || !callerLocation.isValid())
         {
             return;
-        }
-        llvm::outs() << "Found call at " << callerLocation.getFileEntry()->tryGetRealPathName() << ":" << callerLocation.getSpellingLineNumber() << "\n";
+        }        
         const FunctionDecl *target = E->getDirectCallee();
         FullSourceLoc targetLocation = Context->getFullLoc(target->getBeginLoc());
+#ifdef VERBOSE
         std::string libInd = "";
+        llvm::outs() << "Found call at " << callerLocation.getFileEntry()->tryGetRealPathName() << ":" << callerLocation.getSpellingLineNumber() << "\n";
         if (targetLocation.isInSystemHeader())
             libInd = " (library) ";
         llvm::outs() << " \\- " << libInd << targetLocation.getFileEntry()->tryGetRealPathName() << ":"
                      << targetLocation.getSpellingLineNumber() << " -> "
                      << getFunctionSignature(target) << "\n";
-
+#endif
+        functionRef r;
+        if (targetLocation.isInSystemHeader())
+        {
+        r.type = functionRef::LIBCALL;
+        } else {
+        r.type = functionRef::FUNCCALL;
+        }
+        r.lineNo = targetLocation.getSpellingLineNumber();
+        r.filename = targetLocation.getFileEntry()->tryGetRealPathName().data();
+        r.calledFromLineno = callerLocation.getSpellingLineNumber();
+        r.calledFromFilename = callerLocation.getFileEntry()->tryGetRealPathName().data();
+        r.signature = getFunctionSignature(target);
+        dbEntries.push_back(r);
     }
 }
 
@@ -167,9 +151,23 @@ void FunctionDeclCB::run(const MatchFinder::MatchResult &Result) {
             return;
         }
         std::string funcName = getFunctionSignature(E);
+#ifdef VERBOSE
         llvm::outs() << "Found " << funcName << " at " << funcLocation.getFileEntry()->tryGetRealPathName() << ":" << funcLocation.getSpellingLineNumber();
         if (E->isThisDeclarationADefinition())
             llvm::outs() << " (with body)";
         llvm::outs() << "\n";
+#endif
+        functionRef r;
+        if (E->isThisDeclarationADefinition())
+        {
+            r.type = functionRef::FUNCBODY;
+        } else {
+            r.type = functionRef::FUNCDECL;
+        }
+        r.signature = funcName;
+        r.lineNo = funcLocation.getSpellingLineNumber();
+        r.filename = funcLocation.getFileEntry()->tryGetRealPathName().data();
+        r.calledFromFilename = "";
+        dbEntries.push_back(r);
     }
 }

@@ -1,23 +1,14 @@
 AC_INIT([codemort],[0.0.1],[chris@beneschtech.com])
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADERS([config.h])
+
 AM_INIT_AUTOMAKE
 AC_CONFIG_FILES([Makefile src/Makefile src/fakecpp/Makefile])
-AC_PROG_CXX
-AC_ARG_WITH([llvm],
-  [AS_HELP_STRING([--with-llvm],[Location of llvm-config executable])],
-  [LLVMCONFIG=$withval],
-  [LLVMCONFIG=llvm-config])
-AS_IF([test -x $LLVMCONFIG],[AS_ECHO_N('Using LLVM ')],[AS_EXIT([1])])
-[
-$LLVMCONFIG --version
-]
 
-AC_CHECK_LIB([sqlite3],[sqlite3_free],
-[
-],
-[
-    echo "sqlite3 not found"
-    exit 1
-])
+## C++ project, need at least c++11
+AC_LANG([C++])
+AC_PROG_CXX
+AX_CXX_COMPILE_STDCXX(11,[],[mandatory])
 
 ## Autoscan results
 AC_CHECK_FUNCS([memset])
@@ -31,6 +22,26 @@ AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_TYPE_PID_T
 
+## External libraries
+
+### BDB
+AC_CHECK_HEADERS([db.h],[],
+[AS_EXIT(1)])
+AC_SEARCH_LIBS([db_strerror],[db],[],[
+AS_EXIT(1)])
+AC_SUBST(BDB_LIBS,[-ldb])
+
+### LLVM
+[
+LLVMCONFIG=llvm-config
+]
+AC_ARG_WITH([llvm],
+  [AS_HELP_STRING([--with-llvm],[Location of llvm-config executable])],
+  [LLVMCONFIG=$withval])
+AS_IF([test -x $LLVMCONFIG],[AS_ECHO_N('Using LLVM ')],[AS_EXIT([1])])
+[
+$LLVMCONFIG --version
+]
 AC_SUBST(LLVMCXXFLAGS,[`$LLVMCONFIG --cxxflags`])
 AC_SUBST(LLVMCFLAGS,[`$LLVMCONFIG --cflags`])
 AC_SUBST(LLVMLDFLAGS,[`$LLVMCONFIG --ldflags`])
