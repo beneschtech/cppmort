@@ -113,7 +113,7 @@ void CallExprCB::run(const MatchFinder::MatchResult &Result) {
         if (callerLocation.isInSystemHeader() || !callerLocation.isValid())
         {
             return;
-        }        
+        }
         const FunctionDecl *target = E->getDirectCallee();
         FullSourceLoc targetLocation = Context->getFullLoc(target->getBeginLoc());
 #ifdef VERBOSE
@@ -128,9 +128,9 @@ void CallExprCB::run(const MatchFinder::MatchResult &Result) {
         functionRef r;
         if (targetLocation.isInSystemHeader())
         {
-        r.type = functionRef::LIBCALL;
+            r.type = functionRef::LIBCALL;
         } else {
-        r.type = functionRef::FUNCCALL;
+            r.type = functionRef::FUNCCALL;
         }
         r.lineNo = targetLocation.getSpellingLineNumber();
         r.filename = targetLocation.getFileEntry()->tryGetRealPathName().data();

@@ -11,17 +11,26 @@
  * LLC
  *
  **/
-#ifndef FAKECPP_H
-#define FAKECPP_H
+#ifndef OUTPUTDIR_H
+#define OUTPUTDIR_H
 
-#include <vector>
 #include <string>
-#include <sys/types.h>
-#include <functionref.h>
+class OutputDir
+{
+public:
+    OutputDir(std::string);
+    bool valid() const;
+    std::string errorMessage() const;
+    std::string fullPath() const;
 
-std::vector<std::string> parseArgs(int,char **);
-void parseAst(std::vector<std::string> &args);
-bool initDatabase();
-void storeEntries (std::vector<functionRef> &);
+private:
+    void setSysError(std::string msg,int);
+    bool prepareDirectory(std::string);
+    bool clearDirectory(std::string);
 
-#endif // FAKECPP_H
+    bool myValid;
+    std::string myDirectory;
+    std::string myErrorMessage;
+};
+
+#endif // OUTPUTDIR_H

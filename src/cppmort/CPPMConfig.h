@@ -11,17 +11,28 @@
  * LLC
  *
  **/
-#ifndef FAKECPP_H
-#define FAKECPP_H
+#ifndef CPPMORT_CONFIG_H
+#define CPPMORT_CONFIG_H
 
-#include <vector>
 #include <string>
-#include <sys/types.h>
-#include <functionref.h>
 
-std::vector<std::string> parseArgs(int,char **);
-void parseAst(std::vector<std::string> &args);
-bool initDatabase();
-void storeEntries (std::vector<functionRef> &);
+class Config
+{
+public:
+    Config(): myOutputDir(""),myUseGmake(false),myValid(false) { myInstance = this; }
+    static Config *instance();
+    std::string outputDirectory() const;
+    bool useGmake() const;
+    bool valid() const;
 
-#endif // FAKECPP_H
+    void setGmakeFlag(bool);
+    void setOutputDir(const char *);
+
+private:
+    static Config *myInstance;
+    std::string myOutputDir;
+    bool myUseGmake;
+    bool myValid;
+};
+
+#endif // CONFIG_H

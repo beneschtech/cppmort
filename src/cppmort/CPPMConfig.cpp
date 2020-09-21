@@ -11,17 +11,35 @@
  * LLC
  *
  **/
-#ifndef FAKECPP_H
-#define FAKECPP_H
+#include <mutex>
+#include "CPPMConfig.h"
 
-#include <vector>
-#include <string>
-#include <sys/types.h>
-#include <functionref.h>
+Config *Config::myInstance;
 
-std::vector<std::string> parseArgs(int,char **);
-void parseAst(std::vector<std::string> &args);
-bool initDatabase();
-void storeEntries (std::vector<functionRef> &);
+Config *Config::instance() { return myInstance; }
 
-#endif // FAKECPP_H
+std::string Config::outputDirectory() const
+{
+    return myOutputDir;
+}
+
+bool Config::valid() const
+{
+    return myValid;
+}
+
+bool Config::useGmake() const
+{
+    return myUseGmake;
+}
+
+void Config::setGmakeFlag(bool v)
+{
+    myUseGmake = v;
+}
+
+void Config::setOutputDir(const char *d)
+{
+    myValid = true;
+    myOutputDir = d;
+}

@@ -1,1 +1,1 @@
-SUBDIRS = fakecpp 
+SUBDIRS = lib fakecpp cppmort

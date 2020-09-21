@@ -1,13 +1,14 @@
-AC_INIT([codemort],[0.0.1],[chris@beneschtech.com])
+AC_INIT([cppmort],[0.0.1],[bugs-cppmort@beneschtech.com],[cppmort],[https://github.com/beneschtech/cppmort])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([config.h])
 
 AM_INIT_AUTOMAKE
-AC_CONFIG_FILES([Makefile src/Makefile src/fakecpp/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile src/lib/Makefile src/fakecpp/Makefile src/cppmort/Makefile])
 
 ## C++ project, need at least c++11
 AC_LANG([C++])
 AC_PROG_CXX
+AC_PROG_RANLIB
 AX_CXX_COMPILE_STDCXX(11,[],[mandatory])
 
 ## Autoscan results
@@ -38,7 +39,10 @@ LLVMCONFIG=llvm-config
 AC_ARG_WITH([llvm],
   [AS_HELP_STRING([--with-llvm],[Location of llvm-config executable])],
   [LLVMCONFIG=$withval])
-AS_IF([test -x $LLVMCONFIG],[AS_ECHO_N('Using LLVM ')],[AS_EXIT([1])])
+AS_IF([test -x $LLVMCONFIG],[AS_ECHO_N('Using LLVM ')],[
+AS_ECHO('LLVM not found! Please use the --with-llvm flag')
+AS_EXIT([1])
+])
 [
 $LLVMCONFIG --version
 ]

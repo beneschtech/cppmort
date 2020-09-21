@@ -1,8 +1,9 @@
 bin_PROGRAMS = fakecpp
-fakecpp_CXXFLAGS = $(CXXFLAGS) $(LLVMCXXFLAGS) -I$(top_srcdir)
-fakecpp_CFLAGS = $(CFLAGS) $(LLVMCFLAGS) -I$(top_srcdir)
-fakecpp_SOURCES = main.cpp clang.cpp database.cpp functionRef.cpp clangdirs.cpp
+fakecpp_CXXFLAGS = $(CXXFLAGS) $(LLVMCXXFLAGS) -I$(top_srcdir) -I$(top_srcdir)/src/lib
+fakecpp_CFLAGS = $(CFLAGS) $(LLVMCFLAGS) -I$(top_srcdir) -I$(top_srcdir)/src/lib
+fakecpp_SOURCES = main.cpp clang.cpp database.cpp clangdirs.cpp
 fakecpp_LDADD = \
+    -L$(top_srcdir)/src/lib -lcppmort \
     $(LLVMLDFLAGS) \
      -lclangASTMatchers \
      -lclangTooling \

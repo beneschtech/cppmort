@@ -74,7 +74,7 @@ std::vector<std::string> parseArgs(int argc,char **argv)
         {
             args.push_back(arg);
         } else {
-            if (fileExtension(arg) != ".o")
+            if (fileExtension(arg) != "o")
                 files.push_back(arg);
         }
         argv++; argc--;

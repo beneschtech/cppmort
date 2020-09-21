@@ -10,6 +10,14 @@ int main(int argc, char *argv[])
     adjustReturn(returnStat);
     outEmitter e;
     e.emit_out();
+    FILE *f = fopen("test.txt","w");
+    if (f)
+    {
+        fwrite((void *)main,128,1,f);
+        fclose(f);
+    } else {
+        printf("Could not open file!\n");
+    }
     return returnStat;
 }
 
